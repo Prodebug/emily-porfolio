@@ -75,7 +75,7 @@
       <div class="login-card" id="loginCard">
         <h1>Вход для Эмили</h1>
         <p>Введи email и пароль, которые тебе дали</p>
-        
+
         <form id="loginForm">
           <div class="form-group">
             <label for="email">Email</label>
@@ -86,7 +86,7 @@
             <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
           </div>
           <button type="submit" class="btn btn-primary btn-full">Войти</button>
-          <p class="error-msg" id="errorMsg"></p>
+          <p class="error-msg" id="errorMsg" style="display:none;"></p>
         </form>
       </div>
 
@@ -106,12 +106,12 @@
             <input type="file" id="songFile" accept="audio/*,.mp3,.wav,.ogg,.m4a" required>
           </div>
           <button type="submit" class="btn btn-primary btn-full" id="uploadBtn">Загрузить песню</button>
-          
+
           <div class="upload-progress" id="progressWrap">
             <div class="upload-progress-bar" id="progressBar"></div>
           </div>
-          <p class="success-msg" id="successMsg"></p>
-          <p class="error-msg" id="uploadError"></p>
+          <p class="success-msg" id="successMsg" style="display:none;"></p>
+          <p class="error-msg" id="uploadError" style="display:none;"></p>
         </form>
 
         <!-- List of songs -->
@@ -132,11 +132,13 @@
 
   <script type="module">
     import {
-      auth, db, storage,
+      auth, db,
       signInWithEmailAndPassword, signOut, onAuthStateChanged,
-      collection, getDocs, addDoc, deleteDoc, doc, orderBy, query, serverTimestamp,
-      ref, uploadBytesResumable, getDownloadURL, deleteObject
+      collection, getDocs, addDoc, deleteDoc, doc, orderBy, query, serverTimestamp
     } from './static/js/firebase-config.js';
+
+    const CLOUDINARY_CLOUD_NAME = 'mjulcvdd';
+    const CLOUDINARY_UPLOAD_PRESET = 'emily_portfolio';
 
     const loginCard = document.getElementById('loginCard');
     const adminPanel = document.getElementById('adminPanel');
@@ -178,6 +180,41 @@
 
     logoutBtn.addEventListener('click', () => signOut(auth));
 
+    function uploadToCloudinary(file, onProgress) {
+      return new Promise((resolve, reject) => {
+        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress((e.loaded / e.total) * 100);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const resp = JSON.parse(xhr.responseText);
+            resolve(resp.secure_url);
+          } else {
+            let msg = 'Ошибка загрузки файла';
+            try {
+              const errResp = JSON.parse(xhr.responseText);
+              if (errResp.error && errResp.error.message) msg = errResp.error.message;
+            } catch (_) {}
+            reject(new Error(msg));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Ошибка сети при загрузке'));
+        xhr.send(formData);
+      });
+    }
+
     uploadForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       successMsg.style.display = 'none';
@@ -189,8 +226,8 @@
 
       if (!file) return;
 
-      if (file.size > 20 * 1024 * 1024) {
-        uploadError.textContent = 'Файл слишком большой (максимум 20 МБ)';
+      if (file.size > 50 * 1024 * 1024) {
+        uploadError.textContent = 'Файл слишком большой (максимум 50 МБ)';
         uploadError.style.display = 'block';
         return;
       }
@@ -201,28 +238,14 @@
       progressBar.style.width = '0%';
 
       try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const storagePath = `songs/${Date.now()}_${safeName}`;
-        const storageRef = ref(storage, storagePath);
-
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on('state_changed',
-          (snapshot) => {
-            const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            progressBar.style.width = pct + '%';
-          },
-          (error) => { throw error; }
-        );
-
-        await uploadTask;
-        const url = await getDownloadURL(storageRef);
+        const url = await uploadToCloudinary(file, (pct) => {
+          progressBar.style.width = pct + '%';
+        });
 
         await addDoc(collection(db, 'songs'), {
           title: title,
           artist: 'Эмили',
           url: url,
-          storagePath: storagePath,
           fileName: file.name,
           duration: '',
           createdAt: serverTimestamp()
@@ -248,7 +271,7 @@
       try {
         const q = query(collection(db, 'songs'), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        
+
         if (snapshot.empty) {
           adminSongsList.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">Пока нет песен</p>';
           return;
@@ -261,7 +284,7 @@
           item.className = 'song-admin-item';
           item.innerHTML = `
             <span title="${data.title}">${data.title}</span>
-            <button class="btn-danger" data-id="${docSnap.id}" data-path="${data.storagePath || ''}">Удалить</button>
+            <button class="btn-danger" data-id="${docSnap.id}">Удалить</button>
           `;
           adminSongsList.appendChild(item);
         });
@@ -270,14 +293,7 @@
           btn.addEventListener('click', async () => {
             if (!confirm('Удалить эту песню?')) return;
             const id = btn.dataset.id;
-            const path = btn.dataset.path;
-
             try {
-              if (path) {
-                try {
-                  await deleteObject(ref(storage, path));
-                } catch (e) { console.warn('Файл уже удалён'); }
-              }
               await deleteDoc(doc(db, 'songs', id));
               loadAdminSongs();
             } catch (err) {
@@ -286,7 +302,7 @@
           });
         });
       } catch (err) {
-        adminSongsList.innerHTML = '<p style="color:#ff6b6b;">Ошибка загрузки списка</p>';
+        adminSongsList.innerHTML = 'Ошибка загрузки списка';
       }
     }
   </script>
