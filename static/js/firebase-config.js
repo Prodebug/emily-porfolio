@@ -5,13 +5,15 @@
 // ============================================
 
 const firebaseConfig = {
-  apiKey: "СЮДА_API_KEY",
-  authDomain: "СЮДА_PROJECT_ID.firebaseapp.com",
-  projectId: "СЮДА_PROJECT_ID",
-  storageBucket: "СЮДА_PROJECT_ID.appspot.com",
-  messagingSenderId: "СЮДА_SENDER_ID",
-  appId: "СЮДА_APP_ID"
+  apiKey: "AIzaSyBDwMd2-1johk2ZoqtSrd03cz7mP10Sb0c",
+  authDomain: "://firebaseapp.com",
+  projectId: "emily-portfolio-c51ff",
+  storageBucket: "emily-portfolio-c51ff.firebasestorage.app",
+  messagingSenderId: "373843975607",
+  appId: "1:373843975607:web:4a1a8b69bab19966a59c32",
+  measurementId: "G-DGZLTX941H"
 };
+
 
 // Не трогай ниже
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
