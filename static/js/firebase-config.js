@@ -1,6 +1,6 @@
 const firebaseConfig = {
   apiKey: "AIzaSyBDwMd2-1johk2ZoqtSrd03cz7mP10Sb0c",
-  authDomain: "emily-portfolio-c51ff.firebaseapp.com",
+  authDomain: "://firebaseapp.com",
   projectId: "emily-portfolio-c51ff",
   storageBucket: "emily-portfolio-c51ff.firebasestorage.app",
   messagingSenderId: "373843975607",
